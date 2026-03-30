@@ -21,7 +21,6 @@ const logger = createLogger({
     timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
   ),
   transports: [
-    // Always log to console
     new transports.Console({
       format: isDev
         ? combine(colorize({ all: true }), consoleFormat)
