@@ -21,17 +21,3 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-  # Optional: ngrok sidecar — auto-tunnels port 3000
-  # Requires NGROK_AUTHTOKEN in your .env
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: local-mcp-ngrok
-    restart: unless-stopped
-    depends_on:
-      - mcp
-    command: http mcp:3000 --log=stdout --request-header-add="ngrok-skip-browser-warning:true"
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    ports:
-      - "4040:4040"  # ngrok dashboard at http://localhost:4040

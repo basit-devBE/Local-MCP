@@ -1,4 +1,3 @@
-// src/tools/system.js
 import { exec } from "child_process";
 import { promisify } from "util";
 import { z } from "zod";
@@ -11,7 +10,6 @@ function ok(text) {
 
 export function registerSystemTools(server) {
 
-  // ── CRONTAB ───────────────────────────────────────────────────────────────
   server.tool(
     "cron_list",
     "List current user's crontab entries.",
@@ -26,7 +24,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── DISK USAGE ────────────────────────────────────────────────────────────
   server.tool(
     "disk_usage",
     "Show disk usage for a path (like `du -sh`).",
@@ -44,7 +41,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── OPEN FILE / URL ───────────────────────────────────────────────────────
   server.tool(
     "open",
     "Open a file or URL with the default system application.",
@@ -62,7 +58,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── SEND NOTIFICATION ─────────────────────────────────────────────────────
   server.tool(
     "notify",
     "Send a desktop notification.",
@@ -88,7 +83,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── CLIPBOARD ─────────────────────────────────────────────────────────────
   server.tool(
     "clipboard_write",
     "Write text to the system clipboard.",
@@ -107,7 +101,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── CLIPBOARD READ ────────────────────────────────────────────────────────
   server.tool(
     "clipboard_read",
     "Read current clipboard content.",
@@ -126,7 +119,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── SCREENSHOT ────────────────────────────────────────────────────────────
   server.tool(
     "screenshot",
     "Take a screenshot and save it to the filesystem.",
@@ -145,7 +137,6 @@ export function registerSystemTools(server) {
       if (process.platform === "darwin") {
         cmd = `screencapture -T ${delay_secs} "${fp}"`;
       } else if (process.platform === "win32") {
-        // Requires PowerShell
         cmd = `powershell -command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::PrimaryScreen | Out-Null; $bmp = New-Object System.Drawing.Bitmap([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width, [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height); $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen(0,0,0,0,$bmp.Size); $bmp.Save('${fp}')"`;
       } else {
         cmd = `import -window root "${fp}" 2>/dev/null || scrot "${fp}" 2>/dev/null`;
@@ -160,7 +151,6 @@ export function registerSystemTools(server) {
     }
   );
 
-  // ── INSTALLED PACKAGES ────────────────────────────────────────────────────
   server.tool(
     "list_installed",
     "List installed packages for a package manager.",
