@@ -6,6 +6,27 @@ Built on the [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotoc
 
 ---
 
+## Quick Start
+
+```bash
+# 1. Clone and install
+git clone <repo-url>
+cd local-mcp
+npm install
+
+# 2. Start the server with Docker
+docker compose up -d --build
+
+# 3. Expose via ngrok (in a separate terminal)
+ngrok http 3000
+
+# 4. Copy the ngrok URL and add to Claude.ai
+# Settings → Integrations → Add MCP Server
+# URL: https://your-ngrok-url.ngrok-free.app/mcp
+```
+
+---
+
 ## Table of Contents
 
 - [local-env-mcp](#local-env-mcp)
@@ -45,13 +66,13 @@ LLM Client (Claude / Cursor / API)
         ▼
   Express HTTP Server  (:3000)
         │
-        ├── POST /mcp  → createMcpServer() + StreamableHTTPServerTransport
-        ├── GET  /mcp  → resume existing session (by mcp-session-id header)
-        ├── DELETE /mcp → close session
-        └── GET  /health → uptime + FS_ROOT
+        ├── POST /mcp    → Create new McpServer + Transport (stateless)
+        ├── GET  /mcp    → Resume session (optional, by mcp-session-id)
+        ├── DELETE /mcp  → Close session
+        └── GET  /health → Server status
                │
                ▼
-        McpServer (per-request instance)
+        McpServer (fresh instance per request)
                │
         ┌──────┼──────────────────────┐
         ▼      ▼      ▼       ▼       ▼
@@ -59,7 +80,7 @@ LLM Client (Claude / Cursor / API)
     (9 tools) (11) (8 tools) (9)   (8 tools)
 ```
 
-Each `POST /mcp` request spins up a **fresh `McpServer` instance** with a new `StreamableHTTPServerTransport`. Sessions are tracked in a `Map<sessionId, { server, transport }>` and cleaned up on `transport.onclose`.
+**Stateless Mode**: Each POST request creates a fresh McpServer instance. No initialization handshake required — tools can be called immediately (compatible with Claude.ai).
 
 ---
 
@@ -86,15 +107,18 @@ local-mcp/
 
 ## Transport & Session Model
 
-This server uses the **Streamable HTTP** transport from the MCP SDK (`StreamableHTTPServerTransport`), which supports both single-request (stateless) and session-based (stateful) interactions.
+This server uses **Streamable HTTP** transport in **stateless mode** (`sessionIdGenerator: undefined`).
 
 | Route | Purpose |
 |---|---|
-| `POST /mcp` | Initiate a new MCP session or handle a stateless request |
-| `GET /mcp` | Stream responses back for an existing session (SSE) |
-| `DELETE /mcp` | Tear down an existing session |
+| `POST /mcp` | Handle MCP requests (tools/list, tools/call, etc.) — creates fresh server per request |
+| `GET /mcp` | Stream responses for session-based clients (optional) |
+| `DELETE /mcp` | Close an active session (optional) |
 
-The `mcp-session-id` request header is used to correlate `GET` and `DELETE` calls to an active session. The server uses `sessionIdGenerator: undefined` (SDK default) which auto-generates UUIDs.
+Stateless mode means:
+- No `initialize` handshake required
+- Each request is independent
+- Compatible with Claude.ai's direct tool calling
 
 ---
 
@@ -232,18 +256,14 @@ ngrok http 3000
 ## Running with Docker Compose
 
 ```bash
-# Copy and fill in environment variables
-cp .env.example .env
-# Set MCP_AUTH_TOKEN and NGROK_AUTHTOKEN in .env
-
-# Build and start (MCP server + ngrok tunnel)
+# Start the MCP server
 docker compose up -d --build
 
-# Get the public ngrok URL
-docker compose logs ngrok | grep "url="
-
-# View MCP server logs
+# Check logs
 docker compose logs -f mcp
+
+# Expose via ngrok (separate terminal)
+ngrok http 3000
 
 # Stop
 docker compose down
@@ -251,7 +271,7 @@ docker compose down
 
 The Docker image is based on `node:20-slim` and includes: `git`, `curl`, `wget`, `netcat-openbsd`, `dnsutils`, `whois`, `traceroute`, `iputils-ping`, and `procps`.
 
-Your `$HOME` directory is bind-mounted to `/host-home` inside the container (configured in `docker-compose.yml`). The server runs as a non-root `mcpuser`.
+Your `$HOME` directory is bind-mounted to `/host-home` inside the container. The server runs as non-root `mcpuser`.
 
 ---
 
@@ -262,9 +282,10 @@ Your `$HOME` directory is bind-mounted to `/host-home` inside the container (con
 **Settings → Integrations → Add MCP Server**
 
 ```
-URL:    https://<your-ngrok-url>/mcp
-Header: X-MCP-Token: <your-token>
+URL: https://<your-ngrok-url>/mcp
 ```
+
+No auth token needed in testing mode.
 
 ### Cursor
 
@@ -274,10 +295,7 @@ Create or edit `.cursor/mcp.json` in your project root:
 {
   "mcpServers": {
     "local-env": {
-      "url": "https://<your-ngrok-url>/mcp",
-      "headers": {
-        "X-MCP-Token": "<your-token>"
-      }
+      "url": "https://<your-ngrok-url>/mcp"
     }
   }
 }
@@ -301,7 +319,6 @@ const response = await fetch("https://api.anthropic.com/v1/messages", {
       type: "url",
       url: "https://<your-ngrok-url>/mcp",
       name: "local-env",
-      authorization_token: "<your-token>",
     }],
     messages: [{ role: "user", content: "List my home directory" }]
   })
@@ -312,22 +329,27 @@ const response = await fetch("https://api.anthropic.com/v1/messages", {
 
 ## Authentication
 
-Authentication is handled by `src/middleware/auth.js`. Every request must include:
+Authentication is **disabled by default** for testing. To enable:
 
-```
-X-MCP-Token: <MCP_AUTH_TOKEN>
+1. Uncomment the auth middleware in `src/server.js`:
+```javascript
+import { authMiddleware } from "./middleware/auth.js";
+app.use(authMiddleware);
 ```
 
-Behaviour by environment:
+2. Set `MCP_AUTH_TOKEN` in your environment or `.env` file
+
+3. Include the token in client requests:
+```
+X-MCP-Token: <your-token>
+```
 
 | Condition | Result |
 |---|---|
-| `MCP_AUTH_TOKEN` set, correct token provided | Request passes through |
-| `MCP_AUTH_TOKEN` set, wrong/missing token | `401 Unauthorized` |
-| `MCP_AUTH_TOKEN` not set, `NODE_ENV=production` | `500 Server misconfiguration` |
-| `MCP_AUTH_TOKEN` not set, dev mode | Warning logged, request passes through |
-
-> The middleware is imported in `server.js` but currently commented out at the `app.use()` call. Uncomment `app.use(authMiddleware)` in `server.js` to activate it.
+| `MCP_AUTH_TOKEN` set, correct token | ✅ Request passes |
+| `MCP_AUTH_TOKEN` set, wrong/missing token | ❌ 401 Unauthorized |
+| `MCP_AUTH_TOKEN` not set, `NODE_ENV=production` | ⚠️ 500 Server misconfiguration |
+| `MCP_AUTH_TOKEN` not set, dev mode | ⚠️ Warning logged, request passes |
 
 ---
 
@@ -335,13 +357,13 @@ Behaviour by environment:
 
 | Concern | Mitigation |
 |---|---|
-| Path traversal | `safePath()` in `filesystem.js` resolves and validates every path against `FS_ROOT` before any I/O |
-| Secret leakage | `get_env` redacts any env var whose key matches `/secret\|token\|password\|key\|api/i` |
-| Unauthenticated access | `X-MCP-Token` header required (enforced in production) |
-| Container privilege | Docker container runs as non-root `mcpuser` |
-| Filesystem scope | `FS_ROOT` bind-mount limits what the container can reach on the host |
+| Path traversal | `safePath()` validates all paths against `FS_ROOT` |
+| Secret leakage | `get_env` redacts keys matching `/secret\|token\|password\|key\|api/i` |
+| Unauthenticated access | Optional `X-MCP-Token` header (disabled by default for testing) |
+| Container privilege | Runs as non-root `mcpuser` |
+| Filesystem scope | `FS_ROOT` bind-mount limits container access |
 
-**Do not expose this server publicly without setting `MCP_AUTH_TOKEN`.**
+**⚠️ For production use, enable authentication and use a strong token.**
 
 ---
 
@@ -398,17 +420,3 @@ curl http://localhost:3000/health
   "fs_root": "/host-home"
 }
 ```
-
-The Docker Compose healthcheck polls this endpoint every 30 seconds (`curl -f http://localhost:3000/health`).
-
----
-
-## ngrok Dashboard
-
-When the ngrok sidecar is running, the inspection UI is available at:
-
-```
-http://localhost:4040
-```
-
-Use it to inspect request/response payloads, replay requests, and monitor active tunnels.

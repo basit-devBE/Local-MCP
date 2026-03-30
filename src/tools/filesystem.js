@@ -3,12 +3,15 @@ import path from "path";
 import { glob } from "glob";
 import mime from "mime-types";
 import { z } from "zod";
+import { childLogger } from "../logger.js";
 
+const log = childLogger("filesystem");
 const ROOT = process.env.FS_ROOT || "/host-home";
 
 function safePath(inputPath) {
   const resolved = path.resolve(ROOT, inputPath.replace(/^~/, ROOT));
   if (!resolved.startsWith(ROOT)) {
+    log.warn("Path traversal attempt blocked", { inputPath, resolved, root: ROOT });
     throw new Error(`Access denied: path is outside allowed root (${ROOT})`);
   }
   return resolved;
@@ -26,13 +29,17 @@ export function registerFilesystemTools(server) {
     { path: z.string().describe("File path relative to FS_ROOT or absolute") },
     async ({ path: p }) => {
       const fp = safePath(p);
+      log.debug("Reading file", { path: fp });
       const mimeType = mime.lookup(fp) || "application/octet-stream";
       const isBinary = !mimeType.startsWith("text/") && !mimeType.includes("json") && !mimeType.includes("xml") && !mimeType.includes("javascript");
       if (isBinary) {
         const data = fs.readFileSync(fp).toString("base64");
+        log.info("Read binary file (base64)", { path: fp, mimeType, sizeBytes: data.length });
         return ok(`[Binary file — base64]\n${data}`);
       }
-      return ok(fs.readFileSync(fp, "utf-8"));
+      const content = fs.readFileSync(fp, "utf-8");
+      log.info("Read text file", { path: fp, mimeType, lines: content.split("\n").length });
+      return ok(content);
     }
   );
 
@@ -49,9 +56,11 @@ export function registerFilesystemTools(server) {
       fs.mkdirSync(path.dirname(fp), { recursive: true });
       if (append) {
         fs.appendFileSync(fp, content, "utf-8");
+        log.info("Appended to file", { path: fp, bytesWritten: content.length });
         return ok(`Appended ${content.length} chars to ${fp}`);
       }
       fs.writeFileSync(fp, content, "utf-8");
+      log.info("Wrote file", { path: fp, bytesWritten: content.length });
       return ok(`Written ${content.length} chars to ${fp}`);
     }
   );
@@ -66,6 +75,7 @@ export function registerFilesystemTools(server) {
     },
     async ({ path: p, recursive, show_hidden }) => {
       const fp = safePath(p);
+      log.debug("Listing directory", { path: fp, recursive, show_hidden });
       const entries = [];
 
       function walk(dir, depth = 0) {
@@ -84,6 +94,7 @@ export function registerFilesystemTools(server) {
       }
 
       walk(fp);
+      log.info("Listed directory", { path: fp, entryCount: entries.length, recursive });
       return ok(entries.join("\n") || "(empty directory)");
     }
   );
@@ -93,8 +104,10 @@ export function registerFilesystemTools(server) {
     "Create a directory (and any missing parents).",
     { path: z.string() },
     async ({ path: p }) => {
-      fs.mkdirSync(safePath(p), { recursive: true });
-      return ok(`Directory created: ${p}`);
+      const fp = safePath(p);
+      fs.mkdirSync(fp, { recursive: true });
+      log.info("Created directory", { path: fp });
+      return ok(`Directory created: ${fp}`);
     }
   );
 
@@ -105,11 +118,14 @@ export function registerFilesystemTools(server) {
     async ({ path: p, recursive }) => {
       const fp = safePath(p);
       const stat = fs.statSync(fp);
-      if (stat.isDirectory()) {
+      const isDir = stat.isDirectory();
+      log.warn("Deleting path", { path: fp, type: isDir ? "directory" : "file", recursive });
+      if (isDir) {
         fs.rmSync(fp, { recursive });
       } else {
         fs.unlinkSync(fp);
       }
+      log.info("Deleted path", { path: fp });
       return ok(`Deleted: ${fp}`);
     }
   );
@@ -121,8 +137,10 @@ export function registerFilesystemTools(server) {
     async ({ src, dest }) => {
       const sp = safePath(src);
       const dp = safePath(dest);
+      log.debug("Copying path", { src: sp, dest: dp });
       fs.mkdirSync(path.dirname(dp), { recursive: true });
       fs.cpSync(sp, dp, { recursive: true });
+      log.info("Copied path", { src: sp, dest: dp });
       return ok(`Copied ${sp} → ${dp}`);
     }
   );
@@ -134,8 +152,10 @@ export function registerFilesystemTools(server) {
     async ({ src, dest }) => {
       const sp = safePath(src);
       const dp = safePath(dest);
+      log.debug("Moving path", { src: sp, dest: dp });
       fs.mkdirSync(path.dirname(dp), { recursive: true });
       fs.renameSync(sp, dp);
+      log.info("Moved path", { src: sp, dest: dp });
       return ok(`Moved ${sp} → ${dp}`);
     }
   );
@@ -151,15 +171,19 @@ export function registerFilesystemTools(server) {
     },
     async ({ base_path, pattern, content_search, max_results }) => {
       const bp = safePath(base_path);
+      log.debug("Searching files", { base_path: bp, pattern, content_search, max_results });
       const results = [];
 
       if (pattern) {
         const matches = await glob(pattern, { cwd: bp, absolute: true, ignore: ["**/node_modules/**", "**/.git/**"] });
-        results.push(...matches.slice(0, max_results).map(m => `📄 ${path.relative(bp, m)}`));
+        const sliced = matches.slice(0, max_results);
+        results.push(...sliced.map(m => `📄 ${path.relative(bp, m)}`));
+        log.debug("Glob pattern search complete", { pattern, totalMatches: matches.length, returned: sliced.length });
       }
 
       if (content_search) {
         const allFiles = await glob("**/*", { cwd: bp, absolute: true, nodir: true, ignore: ["**/node_modules/**", "**/.git/**"] });
+        let scanned = 0;
         for (const file of allFiles) {
           if (results.length >= max_results) break;
           try {
@@ -170,10 +194,13 @@ export function registerFilesystemTools(server) {
                 results.push(`📄 ${path.relative(bp, file)}:${i + 1}  ${lines[i].trim()}`);
               }
             }
+            scanned++;
           } catch { /* skip binary or unreadable */ }
         }
+        log.debug("Content search complete", { query: content_search, filesScanned: scanned, matchesFound: results.length });
       }
 
+      log.info("File search done", { base_path: bp, totalResults: results.length });
       return ok(results.length ? results.join("\n") : "No results found.");
     }
   );
@@ -184,7 +211,9 @@ export function registerFilesystemTools(server) {
     { path: z.string() },
     async ({ path: p }) => {
       const fp = safePath(p);
+      log.debug("Fetching file info", { path: fp });
       const stat = fs.statSync(fp);
+      log.info("File info retrieved", { path: fp, type: stat.isDirectory() ? "directory" : "file", sizeKB: (stat.size / 1024).toFixed(2) });
       return ok([
         `Path:     ${fp}`,
         `Type:     ${stat.isDirectory() ? "directory" : "file"}`,
