@@ -279,7 +279,7 @@ Your `$HOME` directory is bind-mounted to `/host-home` inside the container. The
 
 ### Claude.ai
 
-**Settings → Integrations → Add MCP Server**
+**Settings → Connectors → Add MCP Server**
 
 ```
 URL: https://<your-ngrok-url>/mcp

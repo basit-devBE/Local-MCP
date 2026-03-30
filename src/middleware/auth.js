@@ -17,8 +17,8 @@ export function authMiddleware(req, res, next) {
   const provided = req.headers["x-mcp-token"];
   if (!provided || provided !== token) {
     log.warn("Rejected request with invalid or missing X-MCP-Token", {
-      ip: req.ip,
-      path: req.path,
+      ip:            req.ip,
+      path:          req.path,
       tokenProvided: Boolean(provided),
     });
     return res.status(401).json({ error: "Unauthorized: invalid or missing X-MCP-Token header" });

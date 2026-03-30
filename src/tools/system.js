@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { z } from "zod";
 import { childLogger } from "../logger.js";
 
-const log = childLogger("system");
+const log       = childLogger("system");
 const execAsync = promisify(exec);
 
 function ok(text) {
@@ -33,7 +33,7 @@ export function registerSystemTools(server) {
     "disk_usage",
     "Show disk usage for a path (like `du -sh`).",
     {
-      path: z.string().default("/").describe("Path to check"),
+      path:  z.string().default("/").describe("Path to check"),
       depth: z.number().optional().default(1).describe("Depth of subdirectory report"),
     },
     async ({ path, depth }) => {
@@ -76,7 +76,7 @@ export function registerSystemTools(server) {
     "notify",
     "Send a desktop notification.",
     {
-      title: z.string(),
+      title:   z.string(),
       message: z.string(),
     },
     async ({ title, message }) => {
@@ -107,9 +107,9 @@ export function registerSystemTools(server) {
     async ({ text }) => {
       log.info("Writing to clipboard", { textLength: text.length, platform: process.platform });
       let cmd;
-      if (process.platform === "darwin") cmd = `echo "${text.replace(/"/g, '\\"')}" | pbcopy`;
-      else if (process.platform === "win32") cmd = `echo "${text}" | clip`;
-      else cmd = `echo "${text.replace(/"/g, '\\"')}" | xclip -selection clipboard 2>/dev/null || echo "${text}" | xsel --clipboard 2>/dev/null`;
+      if (process.platform === "darwin")      cmd = `echo "${text.replace(/"/g, '\\"')}" | pbcopy`;
+      else if (process.platform === "win32")  cmd = `echo "${text}" | clip`;
+      else                                    cmd = `echo "${text.replace(/"/g, '\\"')}" | xclip -selection clipboard 2>/dev/null || echo "${text}" | xsel --clipboard 2>/dev/null`;
       try {
         await execAsync(cmd);
         log.info("Clipboard write successful");
@@ -128,9 +128,9 @@ export function registerSystemTools(server) {
     async () => {
       log.debug("Reading clipboard", { platform: process.platform });
       let cmd;
-      if (process.platform === "darwin") cmd = "pbpaste";
+      if (process.platform === "darwin")     cmd = "pbpaste";
       else if (process.platform === "win32") cmd = "powershell Get-Clipboard";
-      else cmd = "xclip -selection clipboard -o 2>/dev/null || xsel --clipboard 2>/dev/null";
+      else                                   cmd = "xclip -selection clipboard -o 2>/dev/null || xsel --clipboard 2>/dev/null";
       try {
         const { stdout } = await execAsync(cmd);
         log.info("Clipboard read successful", { contentLength: stdout.length });
@@ -147,13 +147,13 @@ export function registerSystemTools(server) {
     "Take a screenshot and save it to the filesystem.",
     {
       output_path: z.string().describe("Where to save the screenshot"),
-      delay_secs: z.number().optional().default(0),
+      delay_secs:  z.number().optional().default(0),
     },
     async ({ output_path, delay_secs }) => {
-      const fs = await import("fs");
+      const fs   = await import("fs");
       const path = await import("path");
       const ROOT = process.env.FS_ROOT || "/host-home";
-      const fp = path.resolve(ROOT, output_path);
+      const fp   = path.resolve(ROOT, output_path);
       fs.mkdirSync(path.dirname(fp), { recursive: true });
 
       log.info("Taking screenshot", { outputPath: fp, delay_secs, platform: process.platform });
@@ -183,7 +183,7 @@ export function registerSystemTools(server) {
     "List installed packages for a package manager.",
     {
       manager: z.enum(["npm", "pip", "brew", "apt", "cargo"]).describe("Package manager to query"),
-      filter: z.string().optional(),
+      filter:  z.string().optional(),
     },
     async ({ manager, filter }) => {
       log.info("Listing installed packages", { manager, filter });

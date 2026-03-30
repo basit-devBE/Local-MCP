@@ -3,7 +3,7 @@ import path from "path";
 import { z } from "zod";
 import { childLogger } from "../logger.js";
 
-const log = childLogger("git");
+const log  = childLogger("git");
 const ROOT = process.env.FS_ROOT || "/host-home";
 
 function repoPath(p) {
@@ -25,16 +25,16 @@ export function registerGitTools(server) {
     "Get the current status of a git repository.",
     { repo: z.string().describe("Path to the git repository") },
     async ({ repo }) => {
-      const rp = repoPath(repo);
+      const rp     = repoPath(repo);
       log.info("Getting git status", { repo: rp });
       const status = await git(rp).status();
       log.debug("Git status fetched", {
-        repo: rp,
-        branch: status.current,
-        ahead: status.ahead,
-        behind: status.behind,
-        staged: status.staged.length,
-        modified: status.modified.length,
+        repo:      rp,
+        branch:    status.current,
+        ahead:     status.ahead,
+        behind:    status.behind,
+        staged:    status.staged.length,
+        modified:  status.modified.length,
         untracked: status.not_added.length,
       });
       const lines = [
@@ -54,11 +54,11 @@ export function registerGitTools(server) {
     "git_diff",
     "Show diff of working tree, staged changes, or between commits.",
     {
-      repo: z.string(),
+      repo:   z.string(),
       staged: z.boolean().optional().default(false).describe("Show staged (index) diff"),
-      file: z.string().optional().describe("Limit diff to this file"),
-      from: z.string().optional().describe("From commit/branch"),
-      to: z.string().optional().describe("To commit/branch"),
+      file:   z.string().optional().describe("Limit diff to this file"),
+      from:   z.string().optional().describe("From commit/branch"),
+      to:     z.string().optional().describe("To commit/branch"),
     },
     async ({ repo, staged, file, from, to }) => {
       const rp = repoPath(repo);
@@ -81,18 +81,18 @@ export function registerGitTools(server) {
     "git_log",
     "Show commit history for a repository.",
     {
-      repo: z.string(),
+      repo:      z.string(),
       max_count: z.number().optional().default(20),
-      branch: z.string().optional(),
-      file: z.string().optional(),
+      branch:    z.string().optional(),
+      file:      z.string().optional(),
     },
     async ({ repo, max_count, branch, file }) => {
-      const rp = repoPath(repo);
+      const rp     = repoPath(repo);
       log.info("Getting git log", { repo: rp, max_count, branch, file });
       const result = await git(rp).log({
         maxCount: max_count,
         ...(branch ? { from: branch } : {}),
-        ...(file ? { file } : {}),
+        ...(file   ? { file }         : {}),
       });
       log.debug("Git log fetched", { repo: rp, commitCount: result.all.length });
       const lines = result.all.map(c =>
@@ -106,18 +106,18 @@ export function registerGitTools(server) {
     "git_branch",
     "List, create, or delete branches.",
     {
-      repo: z.string(),
+      repo:   z.string(),
       action: z.enum(["list", "create", "delete", "checkout"]).default("list"),
-      name: z.string().optional().describe("Branch name for create/delete/checkout"),
+      name:   z.string().optional().describe("Branch name for create/delete/checkout"),
       remote: z.boolean().optional().default(false).describe("Include remote branches when listing"),
     },
     async ({ repo, action, name, remote }) => {
       const rp = repoPath(repo);
       log.info("Git branch operation", { repo: rp, action, name, remote });
-      const g = git(rp);
+      const g  = git(rp);
       if (action === "list") {
         const branches = await g.branch(remote ? ["-a"] : []);
-        const lines = Object.values(branches.branches).map(b => `${b.current ? "* " : "  "}${b.name}`);
+        const lines    = Object.values(branches.branches).map(b => `${b.current ? "* " : "  "}${b.name}`);
         log.debug("Branches listed", { repo: rp, count: lines.length });
         return ok(lines.join("\n"));
       }
@@ -144,7 +144,7 @@ export function registerGitTools(server) {
     "git_add",
     "Stage files for commit.",
     {
-      repo: z.string(),
+      repo:  z.string(),
       files: z.array(z.string()).optional().describe("Files to stage, omit for all"),
     },
     async ({ repo, files }) => {
@@ -160,13 +160,13 @@ export function registerGitTools(server) {
     "git_commit",
     "Commit staged changes.",
     {
-      repo: z.string(),
-      message: z.string().describe("Commit message"),
-      author_name: z.string().optional(),
+      repo:         z.string(),
+      message:      z.string().describe("Commit message"),
+      author_name:  z.string().optional(),
       author_email: z.string().optional(),
     },
     async ({ repo, message, author_name, author_email }) => {
-      const rp = repoPath(repo);
+      const rp   = repoPath(repo);
       log.info("Creating git commit", { repo: rp, message, author: author_name });
       const opts = {};
       if (author_name && author_email) {
@@ -174,11 +174,11 @@ export function registerGitTools(server) {
       }
       const result = await git(rp).commit(message, opts);
       log.info("Commit created", {
-        repo: rp,
+        repo:       rp,
         commitHash: result.commit,
-        changes: result.summary.changes,
+        changes:    result.summary.changes,
         insertions: result.summary.insertions,
-        deletions: result.summary.deletions,
+        deletions:  result.summary.deletions,
       });
       return ok(`Committed: ${result.commit}\nSummary: ${result.summary.changes} changes, ${result.summary.insertions} insertions, ${result.summary.deletions} deletions`);
     }
@@ -188,13 +188,13 @@ export function registerGitTools(server) {
     "git_push",
     "Push commits to a remote.",
     {
-      repo: z.string(),
+      repo:   z.string(),
       remote: z.string().optional().default("origin"),
       branch: z.string().optional(),
-      force: z.boolean().optional().default(false),
+      force:  z.boolean().optional().default(false),
     },
     async ({ repo, remote, branch, force }) => {
-      const rp = repoPath(repo);
+      const rp   = repoPath(repo);
       log.info("Pushing to remote", { repo: rp, remote, branch, force });
       const args = force ? ["--force"] : [];
       await git(rp).push(remote, branch, args);
@@ -207,21 +207,21 @@ export function registerGitTools(server) {
     "git_pull",
     "Pull latest changes from a remote.",
     {
-      repo: z.string(),
+      repo:   z.string(),
       remote: z.string().optional().default("origin"),
       branch: z.string().optional(),
       rebase: z.boolean().optional().default(false),
     },
     async ({ repo, remote, branch, rebase }) => {
-      const rp = repoPath(repo);
+      const rp     = repoPath(repo);
       log.info("Pulling from remote", { repo: rp, remote, branch, rebase });
       const result = await git(rp).pull(remote, branch, rebase ? { "--rebase": null } : {});
       log.info("Pull complete", {
-        repo: rp,
+        repo:       rp,
         remote,
-        changes: result.summary.changes,
+        changes:    result.summary.changes,
         insertions: result.summary.insertions,
-        deletions: result.summary.deletions,
+        deletions:  result.summary.deletions,
       });
       return ok(`Pulled: ${result.summary.changes} changes, ${result.summary.insertions} insertions, ${result.summary.deletions} deletions`);
     }
@@ -231,8 +231,8 @@ export function registerGitTools(server) {
     "git_clone",
     "Clone a remote git repository.",
     {
-      url: z.string().describe("Repository URL"),
-      dest: z.string().describe("Local destination path"),
+      url:   z.string().describe("Repository URL"),
+      dest:  z.string().describe("Local destination path"),
       depth: z.number().optional().describe("Shallow clone depth"),
     },
     async ({ url, dest }) => {
@@ -248,14 +248,14 @@ export function registerGitTools(server) {
     "git_stash",
     "Stash or pop working changes.",
     {
-      repo: z.string(),
-      action: z.enum(["save", "pop", "list", "drop"]).default("save"),
+      repo:    z.string(),
+      action:  z.enum(["save", "pop", "list", "drop"]).default("save"),
       message: z.string().optional(),
     },
     async ({ repo, action, message }) => {
       const rp = repoPath(repo);
       log.info("Git stash operation", { repo: rp, action, message });
-      const g = git(rp);
+      const g  = git(rp);
       if (action === "save") {
         await g.stash(message ? ["push", "-m", message] : []);
         log.info("Changes stashed", { repo: rp, message });
@@ -283,11 +283,11 @@ export function registerGitTools(server) {
     "git_show",
     "Show the content and diff of a specific commit.",
     {
-      repo: z.string(),
+      repo:   z.string(),
       commit: z.string().default("HEAD"),
     },
     async ({ repo, commit }) => {
-      const rp = repoPath(repo);
+      const rp     = repoPath(repo);
       log.info("Showing commit", { repo: rp, commit });
       const result = await git(rp).show([commit, "--stat"]);
       return ok(result);

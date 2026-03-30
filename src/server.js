@@ -7,12 +7,15 @@ import { registerGitTools } from "./tools/git.js";
 import { registerNetworkTools } from "./tools/network.js";
 import { registerShellTools } from "./tools/shell.js";
 import { registerSystemTools } from "./tools/system.js";
-import { childLogger } from "./logger.js";
+import { childLogger, logRequest, logStartupBanner, flushAndExit } from "./logger.js";
 
 const log = childLogger("server");
 
 const PORT    = parseInt(process.env.PORT || "3000");
 const FS_ROOT = process.env.FS_ROOT || "/host-home";
+
+process.on("SIGTERM", () => flushAndExit(0));
+process.on("SIGINT",  () => flushAndExit(0));
 
 function createMcpServer() {
   log.debug("Creating new McpServer instance");
@@ -28,17 +31,9 @@ function createMcpServer() {
 
 const app = express();
 app.use(express.json({ limit: "50mb" }));
-
-app.use((req, _res, next) => {
-  log.debug(`Incoming ${req.method} ${req.path}`, {
-    sessionId: req.headers["mcp-session-id"] || undefined,
-    ip: req.ip,
-  });
-  next();
-});
+app.use(logRequest);
 
 app.get("/health", (_req, res) => {
-  log.debug("Health check requested");
   res.json({ status: "ok", uptime: process.uptime().toFixed(0), fs_root: FS_ROOT });
 });
 
@@ -57,7 +52,7 @@ app.get("/", (_req, res) => {
   `);
 });
 
-const transports = new Map();
+const sessionMap = new Map();
 
 app.post("/mcp", async (req, res) => {
   log.info("New MCP session request received");
@@ -66,15 +61,15 @@ app.post("/mcp", async (req, res) => {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       onsessioninitialized: (sessionId) => {
-        transports.set(sessionId, { server, transport });
-        log.info(`Session opened: ${sessionId}`, { totalSessions: transports.size });
+        sessionMap.set(sessionId, { server, transport });
+        log.info(`Session opened: ${sessionId}`, { totalSessions: sessionMap.size });
       },
     });
 
     transport.onclose = () => {
       if (transport.sessionId) {
-        transports.delete(transport.sessionId);
-        log.info(`Session closed: ${transport.sessionId}`, { totalSessions: transports.size });
+        sessionMap.delete(transport.sessionId);
+        log.info(`Session closed: ${transport.sessionId}`, { totalSessions: sessionMap.size });
       }
     };
 
@@ -88,35 +83,34 @@ app.post("/mcp", async (req, res) => {
 
 app.get("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"];
-  log.debug(`GET /mcp — resuming session ${sessionId}`);
-  const session = transports.get(sessionId);
+  const session   = sessionMap.get(sessionId);
   if (session) {
     await session.transport.handleRequest(req, res);
   } else {
-    log.warn(`GET /mcp — unknown session ID: ${sessionId}`);
+    log.warn("GET /mcp — unknown session ID", { sessionId });
     res.status(400).json({ error: "Unknown session ID" });
   }
 });
 
 app.delete("/mcp", async (req, res) => {
   const sessionId = req.headers["mcp-session-id"];
-  log.info(`DELETE /mcp — tearing down session ${sessionId}`);
-  const session = transports.get(sessionId);
+  log.info("DELETE /mcp — tearing down session", { sessionId });
+  const session = sessionMap.get(sessionId);
   if (session) {
     await session.transport.handleRequest(req, res);
-    transports.delete(sessionId);
-    log.info(`Session ${sessionId} torn down via DELETE`, { totalSessions: transports.size });
+    sessionMap.delete(sessionId);
+    log.info("Session torn down via DELETE", { sessionId, totalSessions: sessionMap.size });
   } else {
-    log.warn(`DELETE /mcp — unknown session ID: ${sessionId}`);
+    log.warn("DELETE /mcp — unknown session ID", { sessionId });
     res.status(400).json({ error: "Unknown session ID" });
   }
 });
 
 app.listen(PORT, () => {
-  log.info(`local-env-mcp started`, {
-    port: PORT,
-    fsRoot: FS_ROOT,
-    auth: process.env.MCP_AUTH_TOKEN ? "enabled" : "DISABLED",
-    nodeEnv: process.env.NODE_ENV || "development",
+  logStartupBanner({
+    port:    PORT,
+    fsRoot:  FS_ROOT,
+    auth:    Boolean(process.env.MCP_AUTH_TOKEN),
+    nodeEnv: process.env.NODE_ENV,
   });
 });

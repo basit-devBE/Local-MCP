@@ -47,9 +47,9 @@ export function registerFilesystemTools(server) {
     "write_file",
     "Write content to a file. Creates parent directories if needed.",
     {
-      path: z.string().describe("Destination file path"),
+      path:    z.string().describe("Destination file path"),
       content: z.string().describe("Text content to write"),
-      append: z.boolean().optional().default(false).describe("Append instead of overwrite"),
+      append:  z.boolean().optional().default(false).describe("Append instead of overwrite"),
     },
     async ({ path: p, content, append }) => {
       const fp = safePath(p);
@@ -69,8 +69,8 @@ export function registerFilesystemTools(server) {
     "list_dir",
     "List files and directories at a given path with metadata.",
     {
-      path: z.string().describe("Directory path"),
-      recursive: z.boolean().optional().default(false),
+      path:        z.string().describe("Directory path"),
+      recursive:   z.boolean().optional().default(false),
       show_hidden: z.boolean().optional().default(false),
     },
     async ({ path: p, recursive, show_hidden }) => {
@@ -82,12 +82,12 @@ export function registerFilesystemTools(server) {
         const items = fs.readdirSync(dir, { withFileTypes: true });
         for (const item of items) {
           if (!show_hidden && item.name.startsWith(".")) continue;
-          const full = path.join(dir, item.name);
-          const rel = path.relative(fp, full);
-          const stat = fs.statSync(full);
+          const full   = path.join(dir, item.name);
+          const rel    = path.relative(fp, full);
+          const stat   = fs.statSync(full);
           const prefix = "  ".repeat(depth);
-          const type = item.isDirectory() ? "📁" : "📄";
-          const size = item.isFile() ? ` (${(stat.size / 1024).toFixed(1)}KB)` : "";
+          const type   = item.isDirectory() ? "📁" : "📄";
+          const size   = item.isFile() ? ` (${(stat.size / 1024).toFixed(1)}KB)` : "";
           entries.push(`${prefix}${type} ${rel}${size}`);
           if (recursive && item.isDirectory()) walk(full, depth + 1);
         }
@@ -116,8 +116,8 @@ export function registerFilesystemTools(server) {
     "Delete a file or directory (recursive for directories).",
     { path: z.string(), recursive: z.boolean().optional().default(false) },
     async ({ path: p, recursive }) => {
-      const fp = safePath(p);
-      const stat = fs.statSync(fp);
+      const fp    = safePath(p);
+      const stat  = fs.statSync(fp);
       const isDir = stat.isDirectory();
       log.warn("Deleting path", { path: fp, type: isDir ? "directory" : "file", recursive });
       if (isDir) {
@@ -164,10 +164,10 @@ export function registerFilesystemTools(server) {
     "search_files",
     "Search for files by glob pattern or text content inside files.",
     {
-      base_path: z.string().describe("Directory to search in"),
-      pattern: z.string().optional().describe("Glob pattern, e.g. '**/*.js'"),
+      base_path:      z.string().describe("Directory to search in"),
+      pattern:        z.string().optional().describe("Glob pattern, e.g. '**/*.js'"),
       content_search: z.string().optional().describe("Search for this text inside files"),
-      max_results: z.number().optional().default(50),
+      max_results:    z.number().optional().default(50),
     },
     async ({ base_path, pattern, content_search, max_results }) => {
       const bp = safePath(base_path);
@@ -176,7 +176,7 @@ export function registerFilesystemTools(server) {
 
       if (pattern) {
         const matches = await glob(pattern, { cwd: bp, absolute: true, ignore: ["**/node_modules/**", "**/.git/**"] });
-        const sliced = matches.slice(0, max_results);
+        const sliced  = matches.slice(0, max_results);
         results.push(...sliced.map(m => `📄 ${path.relative(bp, m)}`));
         log.debug("Glob pattern search complete", { pattern, totalMatches: matches.length, returned: sliced.length });
       }
@@ -188,14 +188,14 @@ export function registerFilesystemTools(server) {
           if (results.length >= max_results) break;
           try {
             const content = fs.readFileSync(file, "utf-8");
-            const lines = content.split("\n");
+            const lines   = content.split("\n");
             for (let i = 0; i < lines.length; i++) {
               if (lines[i].includes(content_search)) {
                 results.push(`📄 ${path.relative(bp, file)}:${i + 1}  ${lines[i].trim()}`);
               }
             }
             scanned++;
-          } catch { /* skip binary or unreadable */ }
+          } catch { }
         }
         log.debug("Content search complete", { query: content_search, filesScanned: scanned, matchesFound: results.length });
       }
@@ -210,7 +210,7 @@ export function registerFilesystemTools(server) {
     "Get metadata about a file or directory.",
     { path: z.string() },
     async ({ path: p }) => {
-      const fp = safePath(p);
+      const fp   = safePath(p);
       log.debug("Fetching file info", { path: fp });
       const stat = fs.statSync(fp);
       log.info("File info retrieved", { path: fp, type: stat.isDirectory() ? "directory" : "file", sizeKB: (stat.size / 1024).toFixed(2) });

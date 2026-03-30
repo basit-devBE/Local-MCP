@@ -3,7 +3,7 @@ import { promisify } from "util";
 import { z } from "zod";
 import { childLogger } from "../logger.js";
 
-const log = childLogger("network");
+const log       = childLogger("network");
 const execAsync = promisify(exec);
 
 function ok(text) {
@@ -16,11 +16,11 @@ export function registerNetworkTools(server) {
     "http_request",
     "Make an HTTP/HTTPS request (like curl). Supports GET, POST, PUT, PATCH, DELETE.",
     {
-      url: z.string().describe("Full URL to request"),
-      method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]).default("GET"),
-      headers: z.record(z.string()).optional().describe("Request headers"),
-      body: z.string().optional().describe("Request body (JSON string or plain text)"),
-      timeout_ms: z.number().optional().default(10000),
+      url:              z.string().describe("Full URL to request"),
+      method:           z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"]).default("GET"),
+      headers:          z.record(z.string()).optional().describe("Request headers"),
+      body:             z.string().optional().describe("Request body (JSON string or plain text)"),
+      timeout_ms:       z.number().optional().default(10000),
       follow_redirects: z.boolean().optional().default(true),
     },
     async ({ url, method, headers, body, timeout_ms, follow_redirects }) => {
@@ -36,18 +36,18 @@ export function registerNetworkTools(server) {
       try {
         const res = await fetch(url, {
           method,
-          headers: { "User-Agent": "local-mcp/1.0", ...headers },
-          body: body || undefined,
+          headers:  { "User-Agent": "local-mcp/1.0", ...headers },
+          body:     body || undefined,
           redirect: follow_redirects ? "follow" : "manual",
-          signal: controller.signal,
+          signal:   controller.signal,
         });
 
-        const elapsed = Date.now() - start;
+        const elapsed         = Date.now() - start;
         log.info("HTTP response received", { method, url, status: res.status, elapsed_ms: elapsed });
 
         const responseHeaders = Object.fromEntries(res.headers.entries());
-        const text = await res.text();
-        const truncated = text.length > 8000;
+        const text            = await res.text();
+        const truncated       = text.length > 8000;
         if (truncated) log.debug("Response body truncated", { url, originalLength: text.length, truncatedTo: 8000 });
 
         const lines = [
@@ -69,7 +69,7 @@ export function registerNetworkTools(server) {
     "ping",
     "Ping a host to check connectivity and latency.",
     {
-      host: z.string().describe("Hostname or IP address"),
+      host:  z.string().describe("Hostname or IP address"),
       count: z.number().optional().default(4),
     },
     async ({ host, count }) => {
@@ -115,8 +115,8 @@ export function registerNetworkTools(server) {
     "port_scan",
     "Check if specific ports are open on a host. Not a full nmap — uses nc/netcat.",
     {
-      host: z.string(),
-      ports: z.array(z.number()).describe("List of ports to check, e.g. [22, 80, 443, 3000, 8080]"),
+      host:       z.string(),
+      ports:      z.array(z.number()).describe("List of ports to check, e.g. [22, 80, 443, 3000, 8080]"),
       timeout_ms: z.number().optional().default(2000),
     },
     async ({ host, ports, timeout_ms }) => {
@@ -179,15 +179,15 @@ export function registerNetworkTools(server) {
     "download_file",
     "Download a file from a URL and save it to the local filesystem.",
     {
-      url: z.string(),
+      url:  z.string(),
       dest: z.string().describe("Destination path (relative to FS_ROOT)"),
     },
     async ({ url, dest }) => {
-      const fs = await import("fs");
-      const path = await import("path");
+      const fs              = await import("fs");
+      const path            = await import("path");
       const { default: fetch } = await import("node-fetch");
-      const ROOT = process.env.FS_ROOT || "/host-home";
-      const dp = path.resolve(ROOT, dest);
+      const ROOT            = process.env.FS_ROOT || "/host-home";
+      const dp              = path.resolve(ROOT, dest);
       log.info("Downloading file", { url, dest: dp });
       fs.mkdirSync(path.dirname(dp), { recursive: true });
 
@@ -211,15 +211,15 @@ export function registerNetworkTools(server) {
       log.info("Running connectivity check");
       const { default: fetch } = await import("node-fetch");
       const targets = [
-        ["1.1.1.1", "https://1.1.1.1/cdn-cgi/trace"],
-        ["Google", "https://www.google.com"],
-        ["GitHub", "https://api.github.com"],
+        ["1.1.1.1",  "https://1.1.1.1/cdn-cgi/trace"],
+        ["Google",   "https://www.google.com"],
+        ["GitHub",   "https://api.github.com"],
       ];
       const results = [];
       for (const [name, url] of targets) {
         const start = Date.now();
         try {
-          const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          const res     = await fetch(url, { signal: AbortSignal.timeout(5000) });
           const elapsed = Date.now() - start;
           results.push(`  ${name.padEnd(10)}  ✅ ${res.status}  ${elapsed}ms`);
           log.debug("Connectivity target reachable", { name, url, status: res.status, elapsed_ms: elapsed });
