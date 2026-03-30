@@ -1,0 +1,37 @@
+services:
+  mcp:
+    build: .
+    container_name: local-mcp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount your home directory so the MCP server can access your real files
+      - ${HOME}:/host-home
+      # Mount Docker socket if you want the MCP to control Docker itself
+      # - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PORT=3000
+      - FS_ROOT=/host-home
+      - NODE_ENV=production
+      # REQUIRED: set a strong random token here or in a .env file
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Optional: ngrok sidecar — auto-tunnels port 3000
+  # Requires NGROK_AUTHTOKEN in your .env
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: local-mcp-ngrok
+    restart: unless-stopped
+    depends_on:
+      - mcp
+    command: http mcp:3000 --log=stdout --request-header-add="ngrok-skip-browser-warning:true"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"  # ngrok dashboard at http://localhost:4040
