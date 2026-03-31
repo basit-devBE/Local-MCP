@@ -13,7 +13,7 @@ export const pgQuery: ToolDefinition = {
   schema: {
     connectionString: z.string().describe("Postgres connection URL (e.g., postgresql://user:password@localhost:5432/mydb)"),
     query: z.string().describe("The SQL query to execute"),
-    params: z.array(z.any()).optional().describe("Optional parameterized values ($1, $2, etc.)"),
+    params: z.array(z.union([z.string(), z.number(), z.boolean()])).optional().describe("Optional parameterized values ($1, $2, etc.)"),
   },
   handler: async ({ connectionString, query, params }) => {
     log.info("Executing Postgres query", { query });
